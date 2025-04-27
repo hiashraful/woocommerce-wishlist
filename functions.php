@@ -1,11 +1,3 @@
-<?php
-/**
- * Custom WooCommerce Wishlist Functionality
- * 
- * @package DevAshWishlist
- * @version 1.0.0
- */
-
 // Exit if accessed directly
 if (!defined('ABSPATH')) {
     exit;
@@ -488,7 +480,7 @@ class Dev_Ash_Wishlist {
         // If we should remove from wishlist after adding to cart
         if ($added && isset($_POST['remove_from_wishlist']) && $_POST['remove_from_wishlist']) {
             $this->remove_from_wishlist($product_id);
-            $message = __('Product added to cart and removed from wishlist.', 'dev-ash-wishlist');
+            $message = __('Product added to cart', 'dev-ash-wishlist');
         } else {
             $message = __('Product added to cart.', 'dev-ash-wishlist');
         }
