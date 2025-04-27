@@ -1,3 +1,12 @@
+<?php
+/**
+ * Custom WooCommerce Wishlist Functionality
+ * 
+ * @package DevAshWishlist
+ * @version 1.0.0
+ */
+
+// Exit if accessed directly
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -110,7 +119,7 @@ class Dev_Ash_Wishlist {
             'nonce' => wp_create_nonce('dev-ash-wishlist-nonce'),
             'is_user_logged_in' => is_user_logged_in(),
             'wishlist_page_url' => $this->wishlist_page_id ? get_permalink($this->wishlist_page_id) : '',
-            'shop_url' => get_permalink(wc_get_page_id('shop')),
+            'shop_url' => esc_url(home_url('/shop/')), // Changed to use home_url for consistent shop URL
             'texts' => array(
                 'add_to_wishlist' => __('Add to Wishlist', 'dev-ash-wishlist'),
                 'already_in_wishlist' => __('Already in Wishlist', 'dev-ash-wishlist'),
@@ -120,12 +129,13 @@ class Dev_Ash_Wishlist {
                 'error' => __('Something went wrong. Please try again.', 'dev-ash-wishlist'),
                 'wishlist_empty' => __('Your wishlist is empty.', 'dev-ash-wishlist'),
                 'browse_products' => __('Browse Products', 'dev-ash-wishlist'),
-                'confirm_add_all' => __('Are you sure you want to add all items to cart?', 'dev-ash-wishlist'),
+                'confirm_add_all' => __('Are you sure you want to add all items to cart? Your wishlist will be emptied.', 'dev-ash-wishlist'),
                 'confirm_remove_all' => __('Are you sure you want to remove all items from wishlist?', 'dev-ash-wishlist'),
-                'add_all_success' => __('All items added to cart.', 'dev-ash-wishlist'),
+                'add_all_success' => __('All items added to cart and removed from wishlist.', 'dev-ash-wishlist'),
                 'remove_all_success' => __('All items removed from wishlist.', 'dev-ash-wishlist'),
                 'add_all_to_cart' => __('Add All to Cart', 'dev-ash-wishlist'),
-                'remove_all' => __('Remove All', 'dev-ash-wishlist')
+                'remove_all' => __('Remove All', 'dev-ash-wishlist'),
+                'product_added_to_cart' => __('Product added to cart and removed from wishlist.', 'dev-ash-wishlist')
             )
         ));
     }
@@ -186,12 +196,23 @@ class Dev_Ash_Wishlist {
             }
         }
         
+        // Empty the wishlist if requested
+        if (isset($_POST['empty_wishlist']) && $_POST['empty_wishlist']) {
+            // Clear wishlist
+            if (is_user_logged_in()) {
+                update_user_meta(get_current_user_id(), 'dev_ash_wishlist', array());
+            } else {
+                setcookie('dev_ash_wishlist', json_encode(array()), time() + (30 * DAY_IN_SECONDS), COOKIEPATH, COOKIE_DOMAIN);
+            }
+        }
+        
         if ($added_count > 0) {
             wp_send_json_success(array(
                 'message' => sprintf(
-                    __('%d products added to cart.', 'dev-ash-wishlist'),
+                    __('%d products added to cart. Your wishlist has been emptied.', 'dev-ash-wishlist'),
                     $added_count
-                )
+                ),
+                'wishlist_emptied' => true
             ));
         } else {
             wp_send_json_error(array('message' => __('Failed to add products to cart.', 'dev-ash-wishlist')));
@@ -269,12 +290,12 @@ class Dev_Ash_Wishlist {
         ob_start();
         
         // Add shop URL to body for JavaScript use
-        echo '<script>document.body.dataset.shopUrl = "' . esc_url(get_permalink(wc_get_page_id('shop'))) . '";</script>';
+        echo '<script>document.body.dataset.shopUrl = "' . esc_url(home_url('/shop/')) . '";</script>';
         
         if (empty($wishlist_items)) {
             echo '<div class="dev-ash-wishlist-empty">';
             echo '<p>' . __('Your wishlist is empty.', 'dev-ash-wishlist') . '</p>';
-            echo '<a href="' . esc_url(get_permalink(wc_get_page_id('shop'))) . '" class="button">' . __('Browse Products', 'dev-ash-wishlist') . '</a>';
+            echo '<a href="' . esc_url(home_url('/shop/')) . '" class="button">' . __('Browse Products', 'dev-ash-wishlist') . '</a>';
             echo '</div>';
         } else {
             echo '<div class="dev-ash-wishlist-content">';
@@ -314,9 +335,16 @@ class Dev_Ash_Wishlist {
                 // Product actions
                 echo '<div class="dev-ash-wishlist-product-actions">';
                 
-                // Add to cart button
+                // Add to cart button with quantity
                 if ($product->is_in_stock()) {
-                    echo '<button class="dev-ash-wishlist-add-to-cart" data-product-id="' . esc_attr($product_id) . '">' . __('Add to Cart', 'dev-ash-wishlist') . '</button>';
+                    // Quantity input
+                    echo '<div class="dev-ash-quantity-wrapper">';
+                    echo '<button class="dev-ash-quantity-minus">-</button>';
+                    echo '<input type="number" class="dev-ash-quantity-input" value="1" min="1" max="99">';
+                    echo '<button class="dev-ash-quantity-plus">+</button>';
+                    echo '</div>';
+                    
+                    echo '<button class="dev-ash-wishlist-add-to-cart" data-product-id="' . esc_attr($product_id) . '">' . __('ADD TO CART', 'dev-ash-wishlist') . '</button>';
                 }
                 
                 // Remove from wishlist button
@@ -440,8 +468,9 @@ class Dev_Ash_Wishlist {
             wp_send_json_error(array('message' => __('Security check failed.', 'dev-ash-wishlist')));
         }
         
-        // Get product ID
+        // Get product ID and quantity
         $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+        $quantity = isset($_POST['quantity']) ? intval($_POST['quantity']) : 1;
         
         if (!$product_id) {
             wp_send_json_error(array('message' => __('Invalid product.', 'dev-ash-wishlist')));
@@ -454,11 +483,20 @@ class Dev_Ash_Wishlist {
             wp_send_json_error(array('message' => __('Product not found.', 'dev-ash-wishlist')));
         }
         
-        $added = WC()->cart->add_to_cart($product_id, 1);
+        $added = WC()->cart->add_to_cart($product_id, $quantity);
+        
+        // If we should remove from wishlist after adding to cart
+        if ($added && isset($_POST['remove_from_wishlist']) && $_POST['remove_from_wishlist']) {
+            $this->remove_from_wishlist($product_id);
+            $message = __('Product added to cart and removed from wishlist.', 'dev-ash-wishlist');
+        } else {
+            $message = __('Product added to cart.', 'dev-ash-wishlist');
+        }
         
         if ($added) {
             wp_send_json_success(array(
-                'message' => __('Product added to cart.', 'dev-ash-wishlist')
+                'message' => $message,
+                'removed_from_wishlist' => isset($_POST['remove_from_wishlist']) && $_POST['remove_from_wishlist']
             ));
         } else {
             wp_send_json_error(array('message' => __('Failed to add product to cart.', 'dev-ash-wishlist')));

@@ -32,6 +32,31 @@
             
             // Close popup button click
             $(document).on('click', '.dev-ash-wishlist-popup-close', this.closePopup);
+            
+            // Close custom alert button
+            $(document).on('click', '.dev-ash-custom-alert-close, .dev-ash-custom-alert-button', this.closeCustomAlert);
+            
+            // Close alert on overlay click
+            $(document).on('click', '.dev-ash-custom-alert-overlay', function(e) {
+                if ($(e.target).hasClass('dev-ash-custom-alert-overlay')) {
+                    DevAshWishlist.closeCustomAlert();
+                }
+            });
+            
+            // Quantity increment/decrement
+            $(document).on('click', '.dev-ash-quantity-minus', this.decreaseQuantity);
+            $(document).on('click', '.dev-ash-quantity-plus', this.increaseQuantity);
+            
+            // Prevent form submission on enter in quantity input
+            $(document).on('keypress', '.dev-ash-quantity-input', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+            
+            // Validate quantity input
+            $(document).on('change', '.dev-ash-quantity-input', this.validateQuantity);
         },
         
         // Initialize local wishlist for guest users
@@ -137,7 +162,7 @@
                         $button.find('.dev-ash-wishlist-icon').html('<i class="far fa-heart"></i>');
                         $button.find('.dev-ash-wishlist-text').text(dev_ash_wishlist.texts.add_to_wishlist);
                         
-                        alert(response.data.message);
+                        DevAshWishlist.showCustomAlert(response.data.message);
                     }
                 },
                 error: function() {
@@ -146,7 +171,7 @@
                     $button.find('.dev-ash-wishlist-icon').html('<i class="far fa-heart"></i>');
                     $button.find('.dev-ash-wishlist-text').text(dev_ash_wishlist.texts.add_to_wishlist);
                     
-                    alert(dev_ash_wishlist.texts.error);
+                    DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.error);
                 }
             });
         },
@@ -201,19 +226,56 @@
                             localStorage.setItem('dev_ash_wishlist', JSON.stringify(wishlist));
                         }
                     } else {
-                        alert(response.data.message);
+                        DevAshWishlist.showCustomAlert(response.data.message);
                         
                         // Enable button
                         $button.prop('disabled', false);
                     }
                 },
                 error: function() {
-                    alert(dev_ash_wishlist.texts.error);
+                    DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.error);
                     
                     // Enable button
                     $button.prop('disabled', false);
                 }
             });
+        },
+        
+        // Decrease quantity
+        decreaseQuantity: function(e) {
+            e.preventDefault();
+            var $input = $(this).siblings('.dev-ash-quantity-input');
+            var value = parseInt($input.val());
+            
+            if (value > 1) {
+                $input.val(value - 1).trigger('change');
+            }
+        },
+        
+        // Increase quantity
+        increaseQuantity: function(e) {
+            e.preventDefault();
+            var $input = $(this).siblings('.dev-ash-quantity-input');
+            var value = parseInt($input.val());
+            var max = parseInt($input.attr('max') || 9999);
+            
+            if (value < max) {
+                $input.val(value + 1).trigger('change');
+            }
+        },
+        
+        // Validate quantity
+        validateQuantity: function() {
+            var $input = $(this);
+            var value = parseInt($input.val());
+            var min = parseInt($input.attr('min') || 1);
+            var max = parseInt($input.attr('max') || 9999);
+            
+            if (isNaN(value) || value < min) {
+                $input.val(min);
+            } else if (value > max) {
+                $input.val(max);
+            }
         },
         
         // Add to cart from wishlist
@@ -222,6 +284,9 @@
             
             var $button = $(this);
             var productId = $button.data('product-id');
+            var $listItem = $button.closest('.dev-ash-wishlist-item');
+            var $quantityInput = $listItem.find('.dev-ash-quantity-input');
+            var quantity = $quantityInput.length ? parseInt($quantityInput.val()) : 1;
             
             if (!productId) {
                 return;
@@ -237,23 +302,49 @@
                 data: {
                     action: 'dev_ash_add_to_cart_from_wishlist',
                     product_id: productId,
-                    nonce: dev_ash_wishlist.nonce
+                    quantity: quantity,
+                    nonce: dev_ash_wishlist.nonce,
+                    remove_from_wishlist: 1 // Add parameter to remove from wishlist
                 },
                 success: function(response) {
                     if (response.success) {
-                        alert(response.data.message);
+                        // Remove item from wishlist
+                        $listItem.fadeOut(300, function() {
+                            $(this).remove();
+                            
+                            // Check if wishlist is empty
+                            if ($('.dev-ash-wishlist-item').length === 0) {
+                                $('.dev-ash-wishlist-content').html(
+                                    '<div class="dev-ash-wishlist-empty">' +
+                                    '<p>' + dev_ash_wishlist.texts.wishlist_empty + '</p>' +
+                                    '<a href="' + dev_ash_wishlist.shop_url + '" class="button">' + dev_ash_wishlist.texts.browse_products + '</a>' +
+                                    '</div>'
+                                );
+                            }
+                        });
+                        
+                        // Update local storage for guest users
+                        if (!dev_ash_wishlist.is_user_logged_in && DevAshWishlist.isLocalStorageAvailable()) {
+                            var wishlist = localStorage.getItem('dev_ash_wishlist') ? JSON.parse(localStorage.getItem('dev_ash_wishlist')) : [];
+                            wishlist = wishlist.filter(function(id) {
+                                return parseInt(id) !== parseInt(productId);
+                            });
+                            localStorage.setItem('dev_ash_wishlist', JSON.stringify(wishlist));
+                        }
+                        
+                        DevAshWishlist.showCustomAlert(response.data.message);
                         
                         // Refresh cart fragments
                         $(document.body).trigger('wc_fragment_refresh');
                     } else {
-                        alert(response.data.message);
+                        DevAshWishlist.showCustomAlert(response.data.message);
+                        
+                        // Enable button
+                        $button.prop('disabled', false);
                     }
-                    
-                    // Enable button
-                    $button.prop('disabled', false);
                 },
                 error: function() {
-                    alert(dev_ash_wishlist.texts.error);
+                    DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.error);
                     
                     // Enable button
                     $button.prop('disabled', false);
@@ -277,47 +368,62 @@
             });
             
             if (productIds.length === 0) {
-                alert(dev_ash_wishlist.texts.wishlist_empty);
+                DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.wishlist_empty);
                 return;
             }
             
-            // Confirm before adding all to cart
-            if (!confirm(dev_ash_wishlist.texts.confirm_add_all)) {
-                return;
-            }
-            
-            // Disable button
-            $button.prop('disabled', true);
-            
-            // AJAX request
-            $.ajax({
-                url: dev_ash_wishlist.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'dev_ash_add_all_to_cart',
-                    product_ids: productIds,
-                    nonce: dev_ash_wishlist.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        alert(response.data.message);
-                        
-                        // Refresh cart fragments
-                        $(document.body).trigger('wc_fragment_refresh');
-                    } else {
-                        alert(response.data.message);
-                    }
+            // Show confirmation dialog
+            DevAshWishlist.showConfirmDialog(
+                dev_ash_wishlist.texts.confirm_add_all,
+                function() {
+                    // Disable button
+                    $button.prop('disabled', true);
                     
-                    // Enable button
-                    $button.prop('disabled', false);
-                },
-                error: function() {
-                    alert(dev_ash_wishlist.texts.error);
-                    
-                    // Enable button
-                    $button.prop('disabled', false);
+                    // AJAX request
+                    $.ajax({
+                        url: dev_ash_wishlist.ajax_url,
+                        type: 'POST',
+                        data: {
+                            action: 'dev_ash_add_all_to_cart',
+                            product_ids: productIds,
+                            nonce: dev_ash_wishlist.nonce,
+                            empty_wishlist: 1 // Add parameter to empty wishlist
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                DevAshWishlist.showCustomAlert(response.data.message);
+                                
+                                // Empty the wishlist display
+                                $('.dev-ash-wishlist-content').html(
+                                    '<div class="dev-ash-wishlist-empty">' +
+                                    '<p>' + dev_ash_wishlist.texts.wishlist_empty + '</p>' +
+                                    '<a href="' + dev_ash_wishlist.shop_url + '" class="button">' + dev_ash_wishlist.texts.browse_products + '</a>' +
+                                    '</div>'
+                                );
+                                
+                                // Clear local storage for guest users
+                                if (!dev_ash_wishlist.is_user_logged_in && DevAshWishlist.isLocalStorageAvailable()) {
+                                    localStorage.setItem('dev_ash_wishlist', JSON.stringify([]));
+                                }
+                                
+                                // Refresh cart fragments
+                                $(document.body).trigger('wc_fragment_refresh');
+                            } else {
+                                DevAshWishlist.showCustomAlert(response.data.message);
+                            }
+                            
+                            // Enable button
+                            $button.prop('disabled', false);
+                        },
+                        error: function() {
+                            DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.error);
+                            
+                            // Enable button
+                            $button.prop('disabled', false);
+                        }
+                    });
                 }
-            });
+            );
         },
         
         // Remove all products from wishlist
@@ -326,50 +432,53 @@
             
             var $button = $(this);
             
-            // Confirm before removing all
-            if (!confirm(dev_ash_wishlist.texts.confirm_remove_all)) {
-                return;
-            }
-            
-            // Disable button
-            $button.prop('disabled', true);
-            
-            // AJAX request
-            $.ajax({
-                url: dev_ash_wishlist.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'dev_ash_remove_all_from_wishlist',
-                    nonce: dev_ash_wishlist.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        // Empty wishlist content
-                        $('.dev-ash-wishlist-content').html(
-                            '<div class="dev-ash-wishlist-empty">' +
-                            '<p>' + dev_ash_wishlist.texts.wishlist_empty + '</p>' +
-                            '<a href="' + dev_ash_wishlist.shop_url + '" class="button">' + dev_ash_wishlist.texts.browse_products + '</a>' +
-                            '</div>'
-                        );
-                        
-                        // Clear local storage for guest users
-                        if (!dev_ash_wishlist.is_user_logged_in && DevAshWishlist.isLocalStorageAvailable()) {
-                            localStorage.setItem('dev_ash_wishlist', JSON.stringify([]));
+            // Show confirmation dialog
+            DevAshWishlist.showConfirmDialog(
+                dev_ash_wishlist.texts.confirm_remove_all,
+                function() {
+                    // Disable button
+                    $button.prop('disabled', true);
+                    
+                    // AJAX request
+                    $.ajax({
+                        url: dev_ash_wishlist.ajax_url,
+                        type: 'POST',
+                        data: {
+                            action: 'dev_ash_remove_all_from_wishlist',
+                            nonce: dev_ash_wishlist.nonce
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                // Empty wishlist content
+                                $('.dev-ash-wishlist-content').html(
+                                    '<div class="dev-ash-wishlist-empty">' +
+                                    '<p>' + dev_ash_wishlist.texts.wishlist_empty + '</p>' +
+                                    '<a href="' + dev_ash_wishlist.shop_url + '" class="button">' + dev_ash_wishlist.texts.browse_products + '</a>' +
+                                    '</div>'
+                                );
+                                
+                                // Clear local storage for guest users
+                                if (!dev_ash_wishlist.is_user_logged_in && DevAshWishlist.isLocalStorageAvailable()) {
+                                    localStorage.setItem('dev_ash_wishlist', JSON.stringify([]));
+                                }
+                                
+                                DevAshWishlist.showCustomAlert(response.data.message);
+                            } else {
+                                DevAshWishlist.showCustomAlert(response.data.message);
+                            }
+                            
+                            // Enable button
+                            $button.prop('disabled', false);
+                        },
+                        error: function() {
+                            DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.error);
+                            
+                            // Enable button
+                            $button.prop('disabled', false);
                         }
-                    } else {
-                        alert(response.data.message);
-                    }
-                    
-                    // Enable button
-                    $button.prop('disabled', false);
-                },
-                error: function() {
-                    alert(dev_ash_wishlist.texts.error);
-                    
-                    // Enable button
-                    $button.prop('disabled', false);
+                    });
                 }
-            });
+            );
         },
         
         // Show popup
@@ -408,6 +517,83 @@
             setTimeout(function() {
                 $('.dev-ash-wishlist-popup').remove();
             }, 300);
+        },
+        
+        // Show custom alert in the center of the screen
+        showCustomAlert: function(message) {
+            // Remove any existing alerts
+            $('.dev-ash-custom-alert-overlay').remove();
+            
+            // Create alert HTML
+            var alertHtml = 
+                '<div class="dev-ash-custom-alert-overlay">' +
+                '<div class="dev-ash-custom-alert">' +
+                '<button class="dev-ash-custom-alert-close">&times;</button>' +
+                '<div class="dev-ash-custom-alert-content">' +
+                '<p>' + message + '</p>' +
+                '<button class="dev-ash-custom-alert-button">OK</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            
+            // Append to body
+            $('body').append(alertHtml);
+            
+            // Show alert
+            setTimeout(function() {
+                $('.dev-ash-custom-alert-overlay').addClass('active');
+            }, 10);
+        },
+        
+        // Close custom alert
+        closeCustomAlert: function() {
+            $('.dev-ash-custom-alert-overlay').removeClass('active');
+            
+            setTimeout(function() {
+                $('.dev-ash-custom-alert-overlay').remove();
+            }, 300);
+        },
+        
+        // Show confirmation dialog
+        showConfirmDialog: function(message, callback) {
+            // Remove any existing alerts
+            $('.dev-ash-custom-alert-overlay').remove();
+            
+            // Create confirm dialog HTML
+            var confirmHtml = 
+                '<div class="dev-ash-custom-alert-overlay">' +
+                '<div class="dev-ash-custom-alert">' +
+                '<button class="dev-ash-custom-alert-close">&times;</button>' +
+                '<div class="dev-ash-custom-alert-content">' +
+                '<p>' + message + '</p>' +
+                '<div class="dev-ash-custom-alert-buttons">' +
+                '<button class="dev-ash-custom-alert-cancel">Cancel</button>' +
+                '<button class="dev-ash-custom-alert-confirm">Confirm</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            
+            // Append to body
+            $('body').append(confirmHtml);
+            
+            // Show dialog
+            setTimeout(function() {
+                $('.dev-ash-custom-alert-overlay').addClass('active');
+            }, 10);
+            
+            // Confirm button click
+            $('.dev-ash-custom-alert-confirm').on('click', function() {
+                DevAshWishlist.closeCustomAlert();
+                if (typeof callback === 'function') {
+                    callback();
+                }
+            });
+            
+            // Cancel button click
+            $('.dev-ash-custom-alert-cancel, .dev-ash-custom-alert-close').on('click', function() {
+                DevAshWishlist.closeCustomAlert();
+            });
         }
     };
     
