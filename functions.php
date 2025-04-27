@@ -129,13 +129,13 @@ class Dev_Ash_Wishlist {
                 'error' => __('Something went wrong. Please try again.', 'dev-ash-wishlist'),
                 'wishlist_empty' => __('Your wishlist is empty.', 'dev-ash-wishlist'),
                 'browse_products' => __('Browse Products', 'dev-ash-wishlist'),
-                'confirm_add_all' => __('Are you sure you want to add all items to cart? Your wishlist will be emptied.', 'dev-ash-wishlist'),
+                'confirm_add_all' => __('Are you sure you want to add all items to cart?', 'dev-ash-wishlist'),
                 'confirm_remove_all' => __('Are you sure you want to remove all items from wishlist?', 'dev-ash-wishlist'),
-                'add_all_success' => __('All items added to cart and removed from wishlist.', 'dev-ash-wishlist'),
+                'add_all_success' => __('All items added to cart ', 'dev-ash-wishlist'),
                 'remove_all_success' => __('All items removed from wishlist.', 'dev-ash-wishlist'),
                 'add_all_to_cart' => __('Add All to Cart', 'dev-ash-wishlist'),
                 'remove_all' => __('Remove All', 'dev-ash-wishlist'),
-                'product_added_to_cart' => __('Product added to cart and removed from wishlist.', 'dev-ash-wishlist')
+                'product_added_to_cart' => __('Product added to cart', 'dev-ash-wishlist')
             )
         ));
     }
@@ -209,7 +209,7 @@ class Dev_Ash_Wishlist {
         if ($added_count > 0) {
             wp_send_json_success(array(
                 'message' => sprintf(
-                    __('%d products added to cart. Your wishlist has been emptied.', 'dev-ash-wishlist'),
+                    __('%d products added to cart.', 'dev-ash-wishlist'),
                     $added_count
                 ),
                 'wishlist_emptied' => true
