@@ -43,9 +43,15 @@
                 }
             });
             
-            // Quantity increment/decrement
-            $(document).on('click', '.dev-ash-quantity-minus', this.decreaseQuantity);
-            $(document).on('click', '.dev-ash-quantity-plus', this.increaseQuantity);
+            // Remove any existing handlers first
+			$(document).off('click', '.dev-ash-quantity-minus');
+			$(document).off('click', '.dev-ash-quantity-plus');
+			$(document).off('change', '.dev-ash-quantity-input');
+
+			// Then add the handlers
+			$(document).on('click', '.dev-ash-quantity-minus', this.decreaseQuantity);
+			$(document).on('click', '.dev-ash-quantity-plus', this.increaseQuantity);
+			$(document).on('change', '.dev-ash-quantity-input', this.validateQuantity);
             
             // Prevent form submission on enter in quantity input
             $(document).on('keypress', '.dev-ash-quantity-input', function(e) {
@@ -241,42 +247,45 @@
             });
         },
         
-        // Decrease quantity
-        decreaseQuantity: function(e) {
-            e.preventDefault();
-            var $input = $(this).siblings('.dev-ash-quantity-input');
-            var value = parseInt($input.val());
-            
-            if (value > 1) {
-                $input.val(value - 1).trigger('change');
-            }
-        },
-        
-        // Increase quantity
-        increaseQuantity: function(e) {
-            e.preventDefault();
-            var $input = $(this).siblings('.dev-ash-quantity-input');
-            var value = parseInt($input.val());
-            var max = parseInt($input.attr('max') || 9999);
-            
-            if (value < max) {
-                $input.val(value + 1).trigger('change');
-            }
-        },
-        
-        // Validate quantity
-        validateQuantity: function() {
-            var $input = $(this);
-            var value = parseInt($input.val());
-            var min = parseInt($input.attr('min') || 1);
-            var max = parseInt($input.attr('max') || 9999);
-            
-            if (isNaN(value) || value < min) {
-                $input.val(min);
-            } else if (value > max) {
-                $input.val(max);
-            }
-        },
+		// Decrease quantity
+		decreaseQuantity: function(e) {
+			e.preventDefault();
+			e.stopPropagation(); 
+			var $input = $(this).siblings('.dev-ash-quantity-input');
+			var currentVal = parseInt($input.val());
+
+			if (!isNaN(currentVal) && currentVal > 1) {
+				$input.attr('data-value', currentVal - 1);
+			}
+		},
+
+		// Increase quantity
+		increaseQuantity: function(e) {
+			e.preventDefault();
+			e.stopPropagation(); 
+			var $input = $(this).siblings('.dev-ash-quantity-input');
+			var currentVal = parseInt($input.val());
+			var max = parseInt($input.attr('max') || 9999);
+
+			if (!isNaN(currentVal) && currentVal < max) {
+				$input.attr('data-value', currentVal + 1);
+			}
+		},
+
+		// Validate quantity
+		validateQuantity: function() {
+			var $input = $(this);
+			var currentVal = parseInt($input.val());
+			var min = parseInt($input.attr('min') || 1);
+			var max = parseInt($input.attr('max') || 9999);
+
+			// Only adjust value if it's actually invalid
+			if (isNaN(currentVal) || currentVal < min) {
+				$input.val(min);
+			} else if (currentVal > max) {
+				$input.val(max);
+			}
+		},
         
         // Add to cart from wishlist
         addToCartFromWishlist: function(e) {
