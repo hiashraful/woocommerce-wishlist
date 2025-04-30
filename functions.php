@@ -158,58 +158,66 @@ class Dev_Ash_Wishlist {
     }
     
     /**
-     * Add all to cart from wishlist
-     */
-    public function ajax_add_all_to_cart() {
-        // Check nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'dev-ash-wishlist-nonce')) {
-            wp_send_json_error(array('message' => __('Security check failed.', 'dev-ash-wishlist')));
-        }
+ * Add all to cart from wishlist
+ */
+public function ajax_add_all_to_cart() {
+    // Check nonce
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'dev-ash-wishlist-nonce')) {
+        wp_send_json_error(array('message' => __('Security check failed.', 'dev-ash-wishlist')));
+    }
+    
+    // Get products data (IDs and quantities)
+    $products = isset($_POST['products']) ? $_POST['products'] : array();
+    
+    if (empty($products)) {
+        wp_send_json_error(array('message' => __('No products to add to cart.', 'dev-ash-wishlist')));
+    }
+    
+    $added_count = 0;
+    $added_items_count = 0;
+    
+    // Add products to cart with their respective quantities
+    foreach ($products as $product_data) {
+        $product_id = isset($product_data['id']) ? intval($product_data['id']) : 0;
+        $quantity = isset($product_data['qty']) ? intval($product_data['qty']) : 1;
         
-        // Get product IDs
-        $product_ids = isset($_POST['product_ids']) ? array_map('intval', $_POST['product_ids']) : array();
+        // Make sure quantity is at least 1
+        $quantity = max(1, $quantity);
         
-        if (empty($product_ids)) {
-            wp_send_json_error(array('message' => __('No products to add to cart.', 'dev-ash-wishlist')));
-        }
+        $product = wc_get_product($product_id);
         
-        $added_count = 0;
-        
-        // Add products to cart
-        foreach ($product_ids as $product_id) {
-            $product = wc_get_product($product_id);
+        if ($product && $product->is_in_stock()) {
+            $added = WC()->cart->add_to_cart($product_id, $quantity);
             
-            if ($product && $product->is_in_stock()) {
-                $added = WC()->cart->add_to_cart($product_id, 1);
-                
-                if ($added) {
-                    $added_count++;
-                }
+            if ($added) {
+                $added_count++;
+                $added_items_count += $quantity;
             }
-        }
-        
-        // Empty the wishlist if requested
-        if (isset($_POST['empty_wishlist']) && $_POST['empty_wishlist']) {
-            // Clear wishlist
-            if (is_user_logged_in()) {
-                update_user_meta(get_current_user_id(), 'dev_ash_wishlist', array());
-            } else {
-                setcookie('dev_ash_wishlist', json_encode(array()), time() + (30 * DAY_IN_SECONDS), COOKIEPATH, COOKIE_DOMAIN);
-            }
-        }
-        
-        if ($added_count > 0) {
-            wp_send_json_success(array(
-                'message' => sprintf(
-                    __('%d products added to cart.', 'dev-ash-wishlist'),
-                    $added_count
-                ),
-                'wishlist_emptied' => true
-            ));
-        } else {
-            wp_send_json_error(array('message' => __('Failed to add products to cart.', 'dev-ash-wishlist')));
         }
     }
+    
+    // Empty the wishlist if requested
+    if (isset($_POST['empty_wishlist']) && $_POST['empty_wishlist']) {
+        // Clear wishlist
+        if (is_user_logged_in()) {
+            update_user_meta(get_current_user_id(), 'dev_ash_wishlist', array());
+        } else {
+            setcookie('dev_ash_wishlist', json_encode(array()), time() + (30 * DAY_IN_SECONDS), COOKIEPATH, COOKIE_DOMAIN);
+        }
+    }
+    
+    if ($added_count > 0) {
+        wp_send_json_success(array(
+            'message' => sprintf(
+                __('%d items added to cart.', 'dev-ash-wishlist'),
+                $added_items_count
+            ),
+            'wishlist_emptied' => true
+        ));
+    } else {
+        wp_send_json_error(array('message' => __('Failed to add products to cart.', 'dev-ash-wishlist')));
+    }
+}
     
     /**
      * Remove all from wishlist
@@ -611,27 +619,3 @@ if (!get_option('dev_ash_wishlist_page_id')) {
         dev_ash_wishlist_activate();
     }
 }
-
-// Optional debug function - remove in production
-function dev_ash_debug_wishlist() {
-    if (isset($_GET['debug_wishlist']) && current_user_can('manage_options')) {
-        echo '<pre>';
-        echo "Registered Shortcodes:\n";
-        global $shortcode_tags;
-        print_r(array_keys($shortcode_tags));
-        
-        echo "\n\nWishlist Page ID: " . get_option('dev_ash_wishlist_page_id');
-        
-        if (is_user_logged_in()) {
-            echo "\n\nCurrent User Wishlist:\n";
-            print_r(get_user_meta(get_current_user_id(), 'dev_ash_wishlist', true));
-        }
-        
-        if (isset($_COOKIE['dev_ash_wishlist'])) {
-            echo "\n\nCookie Wishlist:\n";
-            print_r(json_decode(stripslashes($_COOKIE['dev_ash_wishlist']), true));
-        }
-        echo '</pre>';
-    }
-}
-add_action('wp_footer', 'dev_ash_debug_wishlist');

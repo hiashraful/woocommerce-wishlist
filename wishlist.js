@@ -362,78 +362,84 @@
         },
         
         // Add all products to cart
-        addAllToCart: function(e) {
-            e.preventDefault();
+addAllToCart: function(e) {
+    e.preventDefault();
+    var $button = $(this);
+    var products = []; // Change from productIds to store both ID and quantity
+    
+    // Get all product IDs and quantities from wishlist items
+    $('.dev-ash-wishlist-item').each(function() {
+        var productId = $(this).data('product-id');
+        var $quantityInput = $(this).find('.dev-ash-quantity-input');
+        var quantity = $quantityInput.length ? parseInt($quantityInput.val()) : 1;
+        
+        if (productId) {
+            // Store as object with both ID and quantity
+            products.push({
+                id: productId,
+                qty: quantity
+            });
+        }
+    });
+    
+    if (products.length === 0) {
+        DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.wishlist_empty);
+        return;
+    }
+    
+    // Show confirmation dialog
+    DevAshWishlist.showConfirmDialog(
+        dev_ash_wishlist.texts.confirm_add_all,
+        function() {
+            // Disable button
+            $button.prop('disabled', true);
             
-            var $button = $(this);
-            var productIds = [];
-            
-            // Get all product IDs from wishlist items
-            $('.dev-ash-wishlist-item').each(function() {
-                var productId = $(this).data('product-id');
-                if (productId) {
-                    productIds.push(productId);
+            // AJAX request
+            $.ajax({
+                url: dev_ash_wishlist.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'dev_ash_add_all_to_cart',
+                    products: products, // Change to send both IDs and quantities
+                    nonce: dev_ash_wishlist.nonce,
+                    empty_wishlist: 1 // Add parameter to empty wishlist
+                },
+                success: function(response) {
+                    if (response.success) {
+                        DevAshWishlist.showCustomAlert(response.data.message);
+                        
+                        // Empty the wishlist display
+                        $('.dev-ash-wishlist-content').html(
+                            '<div class="dev-ash-wishlist-empty">' +
+                            '<p>' + dev_ash_wishlist.texts.wishlist_empty + '</p>' +
+                            '<a href="' + dev_ash_wishlist.shop_url + '" class="button">' + dev_ash_wishlist.texts.browse_products + '</a>' +
+                            '</div>'
+                        );
+                        
+                        // Clear local storage for guest users
+                        if (!dev_ash_wishlist.is_user_logged_in && DevAshWishlist.isLocalStorageAvailable()) {
+                            localStorage.setItem('dev_ash_wishlist', JSON.stringify([]));
+                        }
+                        
+                        // Refresh cart fragments
+                        $(document.body).trigger('wc_fragment_refresh');
+                    } else {
+                        DevAshWishlist.showCustomAlert(response.data.message);
+                    }
+                    
+                    // Enable button
+                    $button.prop('disabled', false);
+                },
+                error: function() {
+                    DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.error);
+                    
+                    // Enable button
+                    $button.prop('disabled', false);
                 }
             });
-            
-            if (productIds.length === 0) {
-                DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.wishlist_empty);
-                return;
-            }
-            
-            // Show confirmation dialog
-            DevAshWishlist.showConfirmDialog(
-                dev_ash_wishlist.texts.confirm_add_all,
-                function() {
-                    // Disable button
-                    $button.prop('disabled', true);
-                    
-                    // AJAX request
-                    $.ajax({
-                        url: dev_ash_wishlist.ajax_url,
-                        type: 'POST',
-                        data: {
-                            action: 'dev_ash_add_all_to_cart',
-                            product_ids: productIds,
-                            nonce: dev_ash_wishlist.nonce,
-                            empty_wishlist: 1 // Add parameter to empty wishlist
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                DevAshWishlist.showCustomAlert(response.data.message);
-                                
-                                // Empty the wishlist display
-                                $('.dev-ash-wishlist-content').html(
-                                    '<div class="dev-ash-wishlist-empty">' +
-                                    '<p>' + dev_ash_wishlist.texts.wishlist_empty + '</p>' +
-                                    '<a href="' + dev_ash_wishlist.shop_url + '" class="button">' + dev_ash_wishlist.texts.browse_products + '</a>' +
-                                    '</div>'
-                                );
-                                
-                                // Clear local storage for guest users
-                                if (!dev_ash_wishlist.is_user_logged_in && DevAshWishlist.isLocalStorageAvailable()) {
-                                    localStorage.setItem('dev_ash_wishlist', JSON.stringify([]));
-                                }
-                                
-                                // Refresh cart fragments
-                                $(document.body).trigger('wc_fragment_refresh');
-                            } else {
-                                DevAshWishlist.showCustomAlert(response.data.message);
-                            }
-                            
-                            // Enable button
-                            $button.prop('disabled', false);
-                        },
-                        error: function() {
-                            DevAshWishlist.showCustomAlert(dev_ash_wishlist.texts.error);
-                            
-                            // Enable button
-                            $button.prop('disabled', false);
-                        }
-                    });
-                }
-            );
-        },
+        }
+    );
+},
         
         // Remove all products from wishlist
         removeAllFromWishlist: function(e) {
